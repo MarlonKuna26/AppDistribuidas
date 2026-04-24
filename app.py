@@ -27,7 +27,7 @@ def get_connection():
         f"Uid={username};"
         f"Pwd={password};"
         f"Encrypt=yes;"
-        f"TrustServerCertificate=no;"
+        f"TrustServerCertificate=yes;"
         f"Authentication=SqlPassword;"
     )
 
