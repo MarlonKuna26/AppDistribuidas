@@ -10,28 +10,19 @@ def get_connection():
     database = os.getenv("DB_DATABASE")
     username = os.getenv("DB_USERNAME")
     password = os.getenv("DB_PASSWORD")
-    port = os.getenv("DB_PORT", "1433")
-
-    if not server:
-        raise ValueError("Falta DB_SERVER")
-    if not database:
-        raise ValueError("Falta DB_DATABASE")
-    if not username:
-        raise ValueError("Falta DB_USERNAME")
-    if not password:
-        raise ValueError("Falta DB_PASSWORD")
-
-    connection_string = (
-        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-        f"Server=tcp:{server},{port};"
-        f"Database={database};"
-        f"Uid={username};"
-        f"Pwd={password};"
+    
+    # IMPORTANTE: Usamos Driver 17 y TrustServerCertificate=yes
+    conn_str = (
+        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"SERVER={server};"
+        f"DATABASE={database};"
+        f"UID={username};"
+        f"PWD={password};"
         f"Encrypt=yes;"
         f"TrustServerCertificate=yes;"
+        f"Connection Timeout=30;"
     )
-
-    return pyodbc.connect(connection_string)
+    return pyodbc.connect(conn_str)
 
 
 @app.route("/")
