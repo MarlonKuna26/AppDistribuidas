@@ -1,9 +1,8 @@
 import os
+import pymssql
 from flask import Flask, jsonify
-import pyodbc
 
 app = Flask(__name__)
-
 
 def get_connection():
     server = os.getenv("DB_SERVER")
@@ -11,103 +10,57 @@ def get_connection():
     username = os.getenv("DB_USERNAME")
     password = os.getenv("DB_PASSWORD")
     
-    # IMPORTANTE: Usamos Driver 17 y TrustServerCertificate=yes
-    conn_str = (
-        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-        f"SERVER={server};"
-        f"DATABASE={database};"
-        f"UID={username};"
-        f"PWD={password};"
-        f"Encrypt=yes;"
-        f"TrustServerCertificate=yes;"
-        f"Connection Timeout=30;"
+    # pymssql no usa cadena de conexión larga, usa parámetros directos
+    return pymssql.connect(
+        server=server,
+        user=username,
+        password=password,
+        database=database,
+        autocommit=True
     )
-    return pyodbc.connect(conn_str)
-
 
 @app.route("/")
 def home():
     return jsonify({
         "success": True,
-        "message": "API Flask funcionando correctamente en Render"
+        "message": "API Flask funcionando con pymssql (sin drivers ODBC)"
     })
-
-
-@app.route("/debug-env")
-def debug_env():
-    return jsonify({
-        "DB_SERVER": os.getenv("DB_SERVER"),
-        "DB_DATABASE": os.getenv("DB_DATABASE"),
-        "DB_USERNAME": os.getenv("DB_USERNAME"),
-        "DB_PASSWORD_EXISTS": bool(os.getenv("DB_PASSWORD")),
-        "DB_PORT": os.getenv("DB_PORT"),
-    })
-
 
 @app.route("/test-db")
 def test_db():
     conn = None
-    cursor = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT GETDATE() AS fecha_servidor")
+        cursor.execute("SELECT GETDATE()")
         row = cursor.fetchone()
-
         return jsonify({
             "success": True,
-            "message": "Conexión a SQL Server exitosa",
+            "message": "¡Conexión exitosa sin drivers ODBC!",
             "server_date": str(row[0])
         })
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": "Error al conectar con SQL Server",
+            "message": "Error de conexión",
             "error": str(e)
         }), 500
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()
-
 
 @app.route("/productos")
 def listar_productos():
     conn = None
-    cursor = None
     try:
         conn = get_connection()
-        cursor = conn.cursor()
-
-        # 1. Ajustamos la consulta para que coincida con tus columnas reales
-        # Nota: He quitado imagen_url porque no se ve en tu tabla, 
-        # y agregado Stock y version.
-        cursor.execute("""
-            SELECT TOP 20 Id, Nombre, Precio, Stock, version, Versions
-            FROM productos
-            ORDER BY Id DESC
-        """)
+        cursor = conn.cursor(as_dict=True) # Devuelve los datos como diccionario
+        cursor.execute("SELECT TOP 20 Id, Nombre, Precio, Stock, version FROM productos ORDER BY Id DESC")
         rows = cursor.fetchall()
-
-        data = []
-        for row in rows:
-            # 2. Manejo especial para la columna 'Versions' (binary)
-            # La convertimos a hexadecimal string para que JSON la acepte
-            version_hex = row[5].hex() if row[5] else None
-
-            data.append({
-                "id": row[0],
-                "nombre": row[1],
-                "precio": float(row[2]) if row[2] is not None else 0.0,
-                "stock": row[3],
-                "version_simple": row[4],
-                "row_version": f"0x{version_hex}" if version_hex else None
-            })
 
         return jsonify({
             "success": True,
-            "data": data
+            "data": rows
         })
     except Exception as e:
         return jsonify({
@@ -116,11 +69,8 @@ def listar_productos():
             "error": str(e)
         }), 500
     finally:
-        if cursor:
-            cursor.close()
         if conn:
             conn.close()
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
