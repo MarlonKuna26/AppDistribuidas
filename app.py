@@ -1,6 +1,6 @@
 import os
 from flask import Flask, jsonify
-from mssql_python import connect
+import pyodbc
 
 app = Flask(__name__)
 
@@ -22,16 +22,16 @@ def get_connection():
         raise ValueError("Falta DB_PASSWORD")
 
     connection_string = (
+        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
         f"Server=tcp:{server},{port};"
         f"Database={database};"
         f"Uid={username};"
         f"Pwd={password};"
         f"Encrypt=yes;"
         f"TrustServerCertificate=yes;"
-        f"Authentication=SqlPassword;"
     )
 
-    return connect(connection_string)
+    return pyodbc.connect(connection_string)
 
 
 @app.route("/")
