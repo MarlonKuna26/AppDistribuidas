@@ -2,6 +2,6 @@ services:
   - type: web
     name: api-productos-azure
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: bash render-build.sh
     startCommand: gunicorn app:app
     plan: free
