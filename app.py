@@ -1,5 +1,5 @@
 import os
-import pymssql  # <--- CAMBIA ESTO (Antes decía mssql_python)
+import pyodbc
 from flask import Flask, jsonify
 
 app = Flask(__name__)
@@ -10,14 +10,19 @@ def get_connection():
     username = os.getenv("DB_USERNAME")
     password = os.getenv("DB_PASSWORD")
     
-    # pymssql usa parámetros directos, no un connection_string largo
-    return pymssql.connect(
-        server=server,
-        user=username,
-        password=password,
-        database=database,
-        autocommit=True
+    # Connection string para Azure SQL Server
+    connection_string = (
+        f"Driver={{ODBC Driver 18 for SQL Server}};"
+        f"Server={server};"
+        f"Database={database};"
+        f"UID={username};"
+        f"PWD={password};"
+        f"Encrypt=yes;"
+        f"TrustServerCertificate=no;"
+        f"Connection Timeout=30;"
     )
+    
+    return pyodbc.connect(connection_string)
 
 @app.route('/', methods=['GET'])
 def health():
