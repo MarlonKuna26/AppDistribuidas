@@ -1,68 +1,91 @@
 import os
+import threading
+import pymssql
+import resend
 from flask import Flask, jsonify, request
-from flask_cors import CORS  # Recomendado para evitar errores de bloqueo en el navegador
+from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Esto permite que tu API reciba peticiones desde cualquier origen
+CORS(app)
 
-# --- Función Auxiliar (Debes configurarla con tu lógica de envío) ---
-def enviar_correo_alerta(asunto, mensaje, destino):
-    """
-    Aquí debe ir tu lógica para conectar con un servidor SMTP o API de correos.
-    Por ahora, simularemos que el proceso es exitoso.
-    """
-    print(f"Enviando correo a: {destino} | Asunto: {asunto}")
-    # Aquí iría el código de smtplib o similar
-    return True
+# --- CONFIGURACIÓN DE VARIABLES DESDE RENDER ---
+# Estas llaves coinciden exactamente con tus capturas
+resend.api_key = os.environ.get("RESEND_API_KEY")
+FROM_EMAIL = os.environ.get("MAIL_RESEND", "onboarding@resend.dev")
+
+# Variables de la base de datos Azure
+DB_SERVER = os.environ.get("DB_SERVER")
+DB_USER = os.environ.get("DB_USERNAME")
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
+DB_DATABASE = os.environ.get("DB_DATABASE")
+
+# --- FUNCIÓN PARA SQL SERVER ---
+def get_db_connection():
+    try:
+        conn = pymssql.connect(
+            server=DB_SERVER,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_DATABASE
+        )
+        return conn
+    except Exception as e:
+        print(f"Error conectando a SQL Server: {e}")
+        return None
+
+# --- FUNCIÓN DE ENVÍO ASÍNCRONO ---
+def ejecutar_envio_correo(destino, asunto, mensaje):
+    try:
+        resend.Emails.send({
+            "from": FROM_EMAIL,
+            "to": [destino],
+            "subject": asunto,
+            "html": f"<div>{mensaje}</div>"
+        })
+        print(f"Éxito: Correo enviado a {destino}")
+    except Exception as e:
+        print(f"Error en segundo plano: {e}")
 
 # --- RUTAS ---
 
 @app.route('/', methods=['GET'])
-def health():
+def index():
     return jsonify({
-        "status": "API funciona",
-        "mensaje": "Servidor activo en Render"
+        "api": "Mars Sport API",
+        "database_status": "Configured",
+        "db_name": DB_DATABASE
     }), 200
 
-@app.route('/enviar-alerta', methods=['POST'])
-def enviar_alerta():
+@app.route("/enviar-alerta-resend", methods=["POST"])
+def enviar_alerta_resend():
+    data = request.get_json()
+    
+    # Extraemos datos (ajustado a tu script de WordPress)
+    correo = data.get("to") or data.get("email")
+    asunto = data.get("subject", "Alerta Mars Sport")
+    mensaje = data.get("message", "Mensaje automático")
+
+    if not correo:
+        return jsonify({"status": "error", "msg": "Falta el destinatario"}), 400
+
     try:
-        # 1. Obtener los datos del JSON
-        data = request.get_json()
-        
-        # Si no llega JSON, data será None
-        if not data:
-            return jsonify({"success": False, "message": "No se recibió un cuerpo JSON"}), 400
+        # Usamos threading para que la API responda "OK" de inmediato 
+        # y no se quede esperando a que Resend termine.
+        thread = threading.Thread(
+            target=ejecutar_envio_correo, 
+            args=(correo, asunto, mensaje)
+        )
+        thread.start()
 
-        destino = data.get("to")
-        asunto = data.get("subject")
-        mensaje = data.get("message")
-
-        # 2. Validar que existan los campos
-        if not destino or not asunto or not mensaje:
-            return jsonify({
-                "success": False,
-                "message": "Faltan datos obligatorios: to, subject, message"
-            }), 400
-
-        # 3. Ejecutar la función de envío
-        enviar_correo_alerta(asunto, mensaje, destino)
-        
         return jsonify({
-            "success": True,
-            "message": "Correo enviado con éxito"
+            "status": "ok", 
+            "msg": "Petición recibida, enviando correo..."
         }), 200
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-# --- INICIO DEL SERVIDOR ---
+        return jsonify({"status": "error", "msg": str(e)}), 500
 
 if __name__ == '__main__':
-    # Render usa la variable de entorno PORT
+    # Render asigna el puerto automáticamente
     port = int(os.getenv("PORT", 5000))
-    # debug=False en producción (Render)
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port)
