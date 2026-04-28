@@ -18,3 +18,24 @@ def get_connection():
         database=database,
         autocommit=True
     )
+
+@app.route('/', methods=['GET'])
+def health():
+    return jsonify({"status": "API funciona", "message": "Conectado a Azure SQL Server"}), 200
+
+@app.route('/productos', methods=['GET'])
+def get_productos():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Productos")
+        productos = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "data": productos}), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+if __name__ == '__main__':
+    port = int(os.getenv("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
