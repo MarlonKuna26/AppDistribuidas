@@ -26,13 +26,35 @@ def health():
 @app.route('/productos', methods=['GET'])
 def get_productos():
     try:
+        # Validar variables de ambiente
+        server = os.getenv("DB_SERVER")
+        database = os.getenv("DB_DATABASE")
+        username = os.getenv("DB_USERNAME")
+        password = os.getenv("DB_PASSWORD")
+        
+        if not all([server, database, username, password]):
+            missing = [k for k, v in [
+                ("DB_SERVER", server),
+                ("DB_DATABASE", database),
+                ("DB_USERNAME", username),
+                ("DB_PASSWORD", password)
+            ] if not v]
+            return jsonify({
+                "success": False,
+                "error": f"Variables de ambiente faltantes: {', '.join(missing)}"
+            }), 500
+        
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM Productos")
         productos = cursor.fetchall()
         cursor.close()
         conn.close()
-        return jsonify({"success": True, "data": productos}), 200
+        
+        # Convertir None a lista vacía
+        datos = list(productos) if productos else []
+        
+        return jsonify({"success": True, "data": datos}), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
